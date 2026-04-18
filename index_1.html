@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GameDock</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:480px;margin:0 auto;min-height:100vh}
+.topbar{background:#185FA5;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.app-title{font-size:18px;font-weight:600}
+.save-badge{font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.2)}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}
+.stat{background:#fff;border-radius:10px;padding:10px 12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.stat-label{font-size:11px;color:#888;margin-bottom:2px}
+.stat-val{font-size:22px;font-weight:600;color:#185FA5}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;position:sticky;top:52px;z-index:9}
+.tab{flex:1;padding:11px 4px;font-size:12px;font-weight:500;color:#888;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer}
+.tab.active{color:#185FA5;border-bottom-color:#185FA5}
+.panel{display:none;padding:12px}
+.panel.active{display:block}
+.form-card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field label{font-size:12px;color:#666;font-weight:500}
+.field input,.field select{font-size:14px;padding:9px 11px;border-radius:8px;border:1px solid #ddd;background:#fafafa;color:#111;width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-primary{width:100%;padding:11px;border-radius:8px;border:none;background:#185FA5;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.btn-primary:active{background:#0C447C}
+.btn-sm{padding:6px 10px;border-radius:6px;border:1px solid #ddd;background:#f5f5f5;color:#333;font-size:11px;font-weight:500;cursor:pointer}
+.btn-success{border-color:#97C459;color:#27500A;background:#EAF3DE}
+.btn-danger{border-color:#F09595;color:#A32D2D;background:#FCEBEB}
+.btn-blue{border-color:#85B7EB;color:#0C447C;background:#E6F1FB}
+.toast{padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;display:none}
+.toast.ok{background:#EAF3DE;color:#27500A}
+.toast.err{background:#FCEBEB;color:#791F1F}
+.list-card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.list-header{padding:10px 14px;font-size:12px;font-weight:600;color:#666;background:#fafafa;border-bottom:1px solid #eee;text-transform:uppercase;letter-spacing:0.05em}
+.item-row{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #f0f0f0}
+.item-row:last-child{border-bottom:none}
+.avatar{width:36px;height:36px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#0C447C;flex-shrink:0}
+.item-info{flex:1;min-width:0}
+.item-name{font-size:13px;font-weight:500;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-sub{font-size:11px;color:#888;margin-top:1px}
+.badge{font-size:11px;padding:3px 8px;border-radius:6px;font-weight:500;white-space:nowrap}
+.gg{background:#EAF3DE;color:#27500A}
+.ga{background:#FAEEDA;color:#633806}
+.val{font-size:13px;font-weight:600;color:#111;white-space:nowrap}
+.actions{display:flex;gap:4px;flex-shrink:0}
+.empty{padding:24px;text-align:center;font-size:13px;color:#aaa}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:16px;color:#111}
+.modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1}
+.karte-wrap{display:flex;justify-content:center;margin-bottom:14px}
+#karteExport{width:300px;height:170px;border-radius:14px;background:#185FA5;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+#karteExport::before{content:'';position:absolute;top:-35px;right:-35px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08)}
+.k-row{display:flex;justify-content:space-between;align-items:flex-start}
+.k-logo{font-size:14px;font-weight:700;color:#fff;letter-spacing:0.05em}
+.k-chip{width:28px;height:20px;background:rgba(255,255,255,0.2);border-radius:3px}
+.k-label{font-size:9px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.08em}
+.k-name{font-size:14px;font-weight:600;color:#fff;margin-top:2px}
+.k-id{font-size:10px;color:rgba(255,255,255,0.6);font-family:monospace}
+.k-guth-label{font-size:9px;color:rgba(255,255,255,0.55);text-align:right;text-transform:uppercase}
+.k-guth-val{font-size:16px;font-weight:700;color:#fff;text-align:right}
+.qr-row{display:flex;align-items:center;gap:14px;background:#f8f8f8;border-radius:10px;padding:12px;margin-bottom:14px}
+.qr-info{flex:1;font-size:12px;color:#555;line-height:1.6}
+.qr-info strong{color:#111;font-size:13px;display:block;margin-bottom:2px}
+.export-btns{display:flex;gap:8px}
+.export-btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer}
+.btn-dl{background:#185FA5;color:#fff}
+.btn-cancel{background:#f0f0f0;color:#333}
+.scan-banner{background:#E6F1FB;border-radius:10px;padding:14px;margin-bottom:12px}
+.scan-banner-title{font-size:14px;font-weight:600;color:#0C447C;margin-bottom:4px}
+.scan-banner-sub{font-size:12px;color:#185FA5;line-height:1.5}
+.kunde-detail{background:#fff;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.kunde-detail-name{font-size:20px;font-weight:700;color:#111;margin-bottom:4px}
+.kunde-detail-id{font-size:12px;color:#888;margin-bottom:12px}
+.kunde-detail-guth{font-size:28px;font-weight:700;color:#185FA5;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="app-title">GameDock</div>
+  <span class="save-badge" id="saveBadge">gespeichert</span>
+</div>
+
+<div class="stats-row">
+  <div class="stat"><div class="stat-label">Kunden</div><div class="stat-val" id="statK">0</div></div>
+  <div class="stat"><div class="stat-label">Spiele</div><div class="stat-val" id="statS">0</div></div>
+  <div class="stat"><div class="stat-label">Aktiv</div><div class="stat-val" id="statA">0</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('kunden')">Kunden</button>
+  <button class="tab" onclick="switchTab('spiele')">Spiele</button>
+  <button class="tab" onclick="switchTab('ausleihe')">Ausleihe</button>
+  <button class="tab" onclick="switchTab('rueckgabe')">Rückgabe</button>
+</div>
+
+<div id="panel-kunden" class="panel active">
+  <div id="kundeDetailWrap" style="display:none;margin-bottom:12px"></div>
+  <div class="form-card">
+    <div class="row2">
+      <div class="field"><label>Name</label><input id="kName" placeholder="Anna Müller"></div>
+      <div class="field"><label>Guthaben (€)</label><input id="kGuth" type="number" value="10" min="0" step="0.5"></div>
+    </div>
+    <div class="toast" id="toastK"></div>
+    <button class="btn-primary" onclick="addKunde()">Kunde hinzufügen</button>
+  </div>
+  <div class="list-card">
+    <div class="list-header">Alle Kunden</div>
+    <div id="kundenList"></div>
+  </div>
+</div>
+
+<div id="panel-spiele" class="panel">
+  <div class="form-card">
+    <div class="row2">
+      <div class="field"><label>Spielname</label><input id="sName" placeholder="Catan"></div>
+      <div class="field"><label>Typ</label><select id="sTyp"><option>Brettspiel</option><option>Videospiel</option></select></div>
+    </div>
+    <div class="field"><label>Leihgebühr / Tag (€)</label><input id="sPreis" type="number" value="2.50" min="0" step="0.5" style="width:50%"></div>
+    <div class="toast" id="toastS"></div>
+    <button class="btn-primary" onclick="addSpiel()">Spiel hinzufügen</button>
+  </div>
+  <div class="list-card">
+    <div class="list-header">Spielekatalog</div>
+    <div id="spieleList"></div>
+  </div>
+</div>
+
+<div id="panel-ausleihe" class="panel">
+  <div class="form-card">
+    <div class="field"><label>Kunde</label><select id="aKunde"></select></div>
+    <div class="field"><label>Spiel (nur verfügbare)</label><select id="aSpiel"></select></div>
+    <div class="field"><label>Anzahl Tage</label><input id="aTage" type="number" value="1" min="1" max="30"></div>
+    <div class="toast" id="toastA"></div>
+    <button class="btn-primary" onclick="doAusleihe()">Jetzt ausleihen</button>
+  </div>
+  <div class="list-card">
+    <div class="list-header">Aktive Ausleihen</div>
+    <div id="ausleiheList"></div>
+  </div>
+</div>
+
+<div id="panel-rueckgabe" class="panel">
+  <div class="list-card">
+    <div class="list-header">Spiel zurückgeben</div>
+    <div id="rueckgabeList"></div>
+  </div>
+</div>
+
+<!-- KARTEN MODAL -->
+<div class="modal-bg" id="karteModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('karteModal')">×</button>
+    <div class="modal-title">Kundenkarte</div>
+    <div class="karte-wrap">
+      <div id="karteExport">
+        <div class="k-row">
+          <div class="k-logo">GameDock</div>
+          <div class="k-chip"></div>
+        </div>
+        <div>
+          <div class="k-label">Mitglied</div>
+          <div class="k-name" id="karteNameText">—</div>
+        </div>
+        <div class="k-row">
+          <div class="k-id" id="karteIdText">ID: #0000</div>
+          <div>
+            <div class="k-guth-label">Guthaben</div>
+            <div class="k-guth-val" id="karteGuthText">0.00 €</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="qr-row">
+      <div id="karteQR"></div>
+      <div class="qr-info">
+        <strong>So scannen:</strong>
+        Normale Kamera-App öffnen, QR-Code scannen — der Kunde öffnet sich automatisch in der App.
+      </div>
+    </div>
+    <div class="export-btns">
+      <button class="btn-dl" onclick="exportKarte()">Als PNG speichern</button>
+      <button class="btn-cancel" onclick="closeModal('karteModal')">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = 'https://theD-Creator.github.io/gamedock/';
+const S={get:k=>{try{return JSON.parse(localStorage.getItem('gd_'+k)||'null')}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem('gd_'+k,JSON.stringify(v))}catch(e){}}};
+let kunden=S.get('kunden')||[];
+let spiele=S.get('spiele')||[];
+let ausleihen=S.get('ausleihen')||[];
+let nextK=S.get('nextK')||1;
+let nextS=S.get('nextS')||1;
+let nextA=S.get('nextA')||1;
+
+function save(){S.set('kunden',kunden);S.set('spiele',spiele);S.set('ausleihen',ausleihen);S.set('nextK',nextK);S.set('nextS',nextS);S.set('nextA',nextA);document.getElementById('saveBadge').textContent='gespeichert';}
+function ini(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
+function fmt(n){return(Math.round(n*100)/100).toFixed(2);}
+function toast(id,msg,ok){const el=document.getElementById(id);el.textContent=msg;el.className='toast '+(ok?'ok':'err');el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
+function updateStats(){document.getElementById('statK').textContent=kunden.length;document.getElementById('statS').textContent=spiele.length;document.getElementById('statA').textContent=ausleihen.length;}
+function switchTab(t){document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['kunden','spiele','ausleihe','rueckgabe'][i]===t));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.getElementById('panel-'+t).classList.add('active');if(t==='ausleihe'||t==='rueckgabe')renderSelects();render();}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// QR scan via URL parameter
+function checkURLParam(){
+  const params=new URLSearchParams(window.location.search);
+  const kId=params.get('kunde');
+  if(kId){
+    const id=parseInt(kId);
+    const k=kunden.find(x=>x.id===id);
+    if(k){
+      switchTab('kunden');
+      const wrap=document.getElementById('kundeDetailWrap');
+      wrap.style.display='block';
+      wrap.innerHTML=`<div class="kunde-detail">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0C447C">${ini(k.name)}</div>
+          <div>
+            <div class="kunde-detail-name">${k.name}</div>
+            <div class="kunde-detail-id">ID #${String(k.id).padStart(4,'0')}</div>
+          </div>
+        </div>
+        <div class="kunde-detail-guth">${fmt(k.guthaben)} €</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm btn-success" style="flex:1;padding:10px;font-size:13px" onclick="guthadenLaden(${k.id})">Guthaben aufladen</button>
+          <button class="btn-sm btn-blue" style="flex:1;padding:10px;font-size:13px" onclick="openKarte(${k.id})">Karte anzeigen</button>
+        </div>
+      </div>`;
+    }
+  }
+}
+
+function addKunde(){
+  const name=document.getElementById('kName').value.trim();
+  const g=parseFloat(document.getElementById('kGuth').value)||0;
+  if(!name)return toast('toastK','Bitte einen Namen eingeben',false);
+  kunden.push({id:nextK++,name,guthaben:Math.round(g*100)/100});
+  document.getElementById('kName').value='';
+  save();render();toast('toastK',name+' hinzugefügt!',true);
+}
+
+function addSpiel(){
+  const name=document.getElementById('sName').value.trim();
+  const typ=document.getElementById('sTyp').value;
+  const preis=parseFloat(document.getElementById('sPreis').value)||0;
+  if(!name)return toast('toastS','Bitte einen Namen eingeben',false);
+  spiele.push({id:nextS++,name,typ,preis:Math.round(preis*100)/100,ausgeliehen:false});
+  document.getElementById('sName').value='';
+  save();render();toast('toastS',name+' hinzugefügt!',true);
+}
+
+function doAusleihe(){
+  const kId=parseInt(document.getElementById('aKunde').value);
+  const sId=parseInt(document.getElementById('aSpiel').value);
+  const tage=parseInt(document.getElementById('aTage').value)||1;
+  const k=kunden.find(x=>x.id===kId);
+  const s=spiele.find(x=>x.id===sId);
+  if(!k||!s)return toast('toastA','Bitte Kunde und Spiel wählen',false);
+  const kosten=Math.round(s.preis*tage*100)/100;
+  if(k.guthaben<kosten)return toast('toastA',`Zu wenig Guthaben! Hat ${fmt(k.guthaben)} €, braucht ${fmt(kosten)} €`,false);
+  k.guthaben=Math.round((k.guthaben-kosten)*100)/100;
+  s.ausgeliehen=true;
+  ausleihen.push({id:nextA++,kId,sId,kundeName:k.name,spielName:s.name,kosten,tage,datum:new Date().toLocaleDateString('de-DE')});
+  save();render();renderSelects();
+  toast('toastA',`${s.name} an ${k.name} verliehen! ${fmt(kosten)} € abgezogen.`,true);
+}
+
+function rueckgabe(aId){
+  const a=ausleihen.find(x=>x.id===aId);if(!a)return;
+  const s=spiele.find(x=>x.id===a.sId);if(s)s.ausgeliehen=false;
+  ausleihen=ausleihen.filter(x=>x.id!==aId);
+  save();render();renderSelects();
+}
+
+function guthadenLaden(kId){
+  const betrag=parseFloat(prompt('Wieviel Euro aufladen?')||'0');
+  if(!betrag||betrag<=0)return;
+  const k=kunden.find(x=>x.id===kId);if(!k)return;
+  k.guthaben=Math.round((k.guthaben+betrag)*100)/100;
+  save();render();
+  const wrap=document.getElementById('kundeDetailWrap');
+  if(wrap.style.display!=='none') checkURLParam();
+}
+
+function openKarte(kId){
+  const k=kunden.find(x=>x.id===kId);if(!k)return;
+  document.getElementById('karteNameText').textContent=k.name;
+  document.getElementById('karteIdText').textContent='ID: #'+String(k.id).padStart(4,'0');
+  document.getElementById('karteGuthText').textContent=fmt(k.guthaben)+' €';
+  const qrDiv=document.getElementById('karteQR');
+  qrDiv.innerHTML='';
+  const url=BASE_URL+'?kunde='+k.id;
+  new QRCode(qrDiv,{text:url,width:90,height:90,colorDark:'#042C53',colorLight:'#ffffff'});
+  document.getElementById('karteModal').classList.add('open');
+}
+
+function exportKarte(){
+  const el=document.getElementById('karteExport');
+  html2canvas(el,{scale:3,useCORS:true,backgroundColor:null}).then(canvas=>{
+    const a=document.createElement('a');
+    a.download='kundenkarte-'+document.getElementById('karteNameText').textContent.replace(/ /g,'-')+'.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  });
+}
+
+function renderSelects(){
+  const ks=document.getElementById('aKunde');const ss=document.getElementById('aSpiel');
+  if(ks)ks.innerHTML=kunden.map(k=>`<option value="${k.id}">${k.name} (${fmt(k.guthaben)} €)</option>`).join('')||'<option>Keine Kunden</option>';
+  if(ss){const v=spiele.filter(s=>!s.ausgeliehen);ss.innerHTML=v.map(s=>`<option value="${s.id}">${s.name} — ${fmt(s.preis)} €/Tag</option>`).join('')||'<option>Alle ausgeliehen</option>';}
+}
+
+function renderKunden(){
+  const el=document.getElementById('kundenList');
+  if(!kunden.length){el.innerHTML='<div class="empty">Noch keine Kunden</div>';return;}
+  el.innerHTML=kunden.map(k=>`<div class="item-row"><div class="avatar">${ini(k.name)}</div><div class="item-info"><div class="item-name">${k.name}</div><div class="item-sub">ID #${String(k.id).padStart(4,'0')} · ${fmt(k.guthaben)} €</div></div><div class="actions"><button class="btn-sm btn-success" onclick="guthadenLaden(${k.id})">+ €</button><button class="btn-sm btn-blue" onclick="openKarte(${k.id})">Karte</button></div></div>`).join('');
+}
+function renderSpiele(){
+  const el=document.getElementById('spieleList');
+  if(!spiele.length){el.innerHTML='<div class="empty">Noch keine Spiele</div>';return;}
+  el.innerHTML=spiele.map(s=>`<div class="item-row"><div class="item-info"><div class="item-name">${s.name}</div><div class="item-sub">${s.typ} · ${fmt(s.preis)} €/Tag</div></div><span class="badge ${s.ausgeliehen?'ga':'gg'}">${s.ausgeliehen?'ausgeliehen':'verfügbar'}</span></div>`).join('');
+}
+function renderAusleihen(){
+  const el=document.getElementById('ausleiheList');
+  if(!ausleihen.length){el.innerHTML='<div class="empty">Keine aktiven Ausleihen</div>';return;}
+  el.innerHTML=ausleihen.map(a=>`<div class="item-row"><div class="item-info"><div class="item-name">${a.spielName}</div><div class="item-sub">${a.kundeName} · ${a.datum} · ${a.tage} Tag(e)</div></div><div class="val">${fmt(a.kosten)} €</div></div>`).join('');
+}
+function renderRueckgabe(){
+  const el=document.getElementById('rueckgabeList');
+  if(!ausleihen.length){el.innerHTML='<div class="empty">Keine aktiven Ausleihen</div>';return;}
+  el.innerHTML=ausleihen.map(a=>`<div class="item-row"><div class="item-info"><div class="item-name">${a.spielName}</div><div class="item-sub">${a.kundeName} · ${a.datum}</div></div><button class="btn-sm btn-danger" onclick="rueckgabe(${a.id})">Zurück</button></div>`).join('');
+}
+function render(){renderKunden();renderSpiele();renderAusleihen();renderRueckgabe();updateStats();}
+
+render();
+checkURLParam();
+</script>
+</body>
+</html>
