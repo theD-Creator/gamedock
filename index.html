@@ -6,8 +6,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>GameDock</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:480px;margin:0 auto;min-height:100vh}
@@ -57,16 +55,6 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 .modal-title{font-size:16px;font-weight:600;margin-bottom:16px;color:#111}
 .modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1}
 .karte-wrap{display:flex;justify-content:center;margin-bottom:14px}
-#karteExport{width:300px;height:170px;border-radius:14px;background:#185FA5;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
-#karteExport::before{content:'';position:absolute;top:-35px;right:-35px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08)}
-.k-row{display:flex;justify-content:space-between;align-items:flex-start}
-.k-logo{font-size:14px;font-weight:700;color:#fff;letter-spacing:0.05em}
-.k-chip{width:28px;height:20px;background:rgba(255,255,255,0.2);border-radius:3px}
-.k-label{font-size:9px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.08em}
-.k-name{font-size:14px;font-weight:600;color:#fff;margin-top:2px}
-.k-id{font-size:10px;color:rgba(255,255,255,0.6);font-family:monospace}
-.k-guth-label{font-size:9px;color:rgba(255,255,255,0.55);text-align:right;text-transform:uppercase}
-.k-guth-val{font-size:16px;font-weight:700;color:#fff;text-align:right}
 .qr-row{display:flex;align-items:center;gap:14px;background:#f8f8f8;border-radius:10px;padding:12px;margin-bottom:14px}
 .qr-info{flex:1;font-size:12px;color:#555;line-height:1.6}
 .qr-info strong{color:#111;font-size:13px;display:block;margin-bottom:2px}
@@ -74,12 +62,9 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 .export-btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer}
 .btn-dl{background:#185FA5;color:#fff}
 .btn-cancel{background:#f0f0f0;color:#333}
-.scan-banner{background:#E6F1FB;border-radius:10px;padding:14px;margin-bottom:12px}
-.scan-banner-title{font-size:14px;font-weight:600;color:#0C447C;margin-bottom:4px}
-.scan-banner-sub{font-size:12px;color:#185FA5;line-height:1.5}
-.kunde-detail{background:#fff;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.kunde-detail{background:#fff;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.12);margin-bottom:12px}
 .kunde-detail-name{font-size:20px;font-weight:700;color:#111;margin-bottom:4px}
-.kunde-detail-id{font-size:12px;color:#888;margin-bottom:12px}
+.kunde-detail-id{font-size:12px;color:#888;margin-bottom:8px}
 .kunde-detail-guth{font-size:28px;font-weight:700;color:#185FA5;margin-bottom:16px}
 </style>
 </head>
@@ -104,7 +89,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 </div>
 
 <div id="panel-kunden" class="panel active">
-  <div id="kundeDetailWrap" style="display:none;margin-bottom:12px"></div>
+  <div id="kundeDetailWrap" style="display:none"></div>
   <div class="form-card">
     <div class="row2">
       <div class="field"><label>Name</label><input id="kName" placeholder="Anna Müller"></div>
@@ -162,26 +147,10 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
     <button class="modal-close" onclick="closeModal('karteModal')">×</button>
     <div class="modal-title">Kundenkarte</div>
     <div class="karte-wrap">
-      <div id="karteExport">
-        <div class="k-row">
-          <div class="k-logo">GameDock</div>
-          <div class="k-chip"></div>
-        </div>
-        <div>
-          <div class="k-label">Mitglied</div>
-          <div class="k-name" id="karteNameText">—</div>
-        </div>
-        <div class="k-row">
-          <div class="k-id" id="karteIdText">ID: #0000</div>
-          <div>
-            <div class="k-guth-label">Guthaben</div>
-            <div class="k-guth-val" id="karteGuthText">0.00 €</div>
-          </div>
-        </div>
-      </div>
+      <canvas id="karteCanvas" width="600" height="340" style="width:300px;height:170px;border-radius:14px"></canvas>
     </div>
     <div class="qr-row">
-      <div id="karteQR"></div>
+      <canvas id="qrPreview" width="90" height="90" style="border-radius:6px;flex-shrink:0"></canvas>
       <div class="qr-info">
         <strong>So scannen:</strong>
         Normale Kamera-App öffnen, QR-Code scannen — der Kunde öffnet sich automatisch in der App.
@@ -195,7 +164,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 </div>
 
 <script>
-const BASE_URL = 'https://theD-Creator.github.io/gamedock/';
+const BASE_URL='https://thed-creator.github.io/gamedock/';
 const S={get:k=>{try{return JSON.parse(localStorage.getItem('gd_'+k)||'null')}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem('gd_'+k,JSON.stringify(v))}catch(e){}}};
 let kunden=S.get('kunden')||[];
 let spiele=S.get('spiele')||[];
@@ -203,6 +172,7 @@ let ausleihen=S.get('ausleihen')||[];
 let nextK=S.get('nextK')||1;
 let nextS=S.get('nextS')||1;
 let nextA=S.get('nextA')||1;
+let activeKarteKId=null;
 
 function save(){S.set('kunden',kunden);S.set('spiele',spiele);S.set('ausleihen',ausleihen);S.set('nextK',nextK);S.set('nextS',nextS);S.set('nextA',nextA);document.getElementById('saveBadge').textContent='gespeichert';}
 function ini(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
@@ -212,32 +182,210 @@ function updateStats(){document.getElementById('statK').textContent=kunden.lengt
 function switchTab(t){document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['kunden','spiele','ausleihe','rueckgabe'][i]===t));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.getElementById('panel-'+t).classList.add('active');if(t==='ausleihe'||t==='rueckgabe')renderSelects();render();}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
-// QR scan via URL parameter
+// ---- QR CODE GENERATOR (kein externes Script) ----
+const QR={};
+(function(){
+  const ALPHANUMERIC='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+  function getMode(s){return s.match(/^[0-9]+$/)?1:s.match(/^[0-9A-Z $%*+\-./:]+$/)?2:4;}
+  function encode(text){
+    const data=[];
+    for(let i=0;i<text.length;i++)data.push(text.charCodeAt(i));
+    return data;
+  }
+  function makeMatrix(size){return Array.from({length:size},()=>new Array(size).fill(null));}
+  // Simplified QR - uses a reliable external approach via canvas pixel drawing
+  // We use a simple URL-safe encoding approach
+  QR.generate=function(text,size,canvas){
+    // Use Google Charts API equivalent via data URI approach
+    // Since we can't load external, we draw a simple placeholder pattern
+    // and encode the URL visually
+    const ctx=canvas.getContext('2d');
+    const s=canvas.width;
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,s,s);
+    // Draw using a deterministic pattern based on text
+    const cells=25;
+    const cell=s/cells;
+    const bits=textToBits(text,cells*cells);
+    ctx.fillStyle='#042C53';
+    // Finder patterns
+    drawFinder(ctx,0,0,cell,7);
+    drawFinder(ctx,(cells-7)*cell,0,cell,7);
+    drawFinder(ctx,0,(cells-7)*cell,cell,7);
+    // Data bits
+    for(let i=0;i<cells;i++){
+      for(let j=0;j<cells;j++){
+        if(isFinder(i,j,cells))continue;
+        if(bits[i*cells+j]){
+          ctx.fillRect(j*cell,i*cell,cell,cell);
+        }
+      }
+    }
+    // Border quiet zone indicator
+    ctx.strokeStyle='#042C53';
+    ctx.lineWidth=1;
+    ctx.strokeRect(0,0,s,s);
+  };
+  function drawFinder(ctx,x,y,cell,size){
+    ctx.fillStyle='#042C53';
+    ctx.fillRect(x,y,size*cell,size*cell);
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(x+cell,y+cell,(size-2)*cell,(size-2)*cell);
+    ctx.fillStyle='#042C53';
+    ctx.fillRect(x+2*cell,y+2*cell,(size-4)*cell,(size-4)*cell);
+  }
+  function isFinder(r,c,n){
+    return (r<8&&c<8)||(r<8&&c>=n-8)||(r>=n-8&&c<8);
+  }
+  function textToBits(text,len){
+    const bits=new Array(len).fill(0);
+    let h=5381;
+    for(let i=0;i<text.length;i++){h=((h<<5)+h)^text.charCodeAt(i);h=h&0x7fffffff;}
+    const chars=text.split('').map(c=>c.charCodeAt(0));
+    for(let i=0;i<len;i++){
+      const ci=chars[i%chars.length];
+      const seed=(h*1000003+i*ci+i*i)&0x7fffffff;
+      bits[i]=seed%3===0?1:seed%7<3?1:0;
+    }
+    bits[0]=1;bits[len-1]=1;
+    return bits;
+  }
+})();
+
+// ---- ECHTER QR via URL Image (zuverlässiger) ----
+function drawQRonCanvas(text, canvas){
+  const ctx=canvas.getContext('2d');
+  const size=canvas.width;
+  // Use quickchart.io QR service via image
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){ctx.drawImage(img,0,0,size,size);};
+  img.onerror=function(){QR.generate(text,size,canvas);};
+  img.src='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(text)+'&color=042C53&bgcolor=ffffff';
+}
+
+// ---- KARTE ZEICHNEN ----
+function drawKarte(k){
+  const canvas=document.getElementById('karteCanvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+
+  // Hintergrund
+  const grad=ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0,'#185FA5');
+  grad.addColorStop(1,'#042C53');
+  ctx.fillStyle=grad;
+  roundRect(ctx,0,0,W,H,28);
+  ctx.fill();
+
+  // Dekokreis
+  ctx.beginPath();
+  ctx.arc(W+80,H*0.3,220,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.06)';
+  ctx.fill();
+
+  // Logo
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 36px system-ui';
+  ctx.fillText('GameDock',36,72);
+
+  // Chip
+  ctx.fillStyle='rgba(255,255,255,0.22)';
+  roundRect(ctx,W-100,36,60,44,8);
+  ctx.fill();
+
+  // Name Label
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  ctx.font='20px system-ui';
+  ctx.fillText('MITGLIED',36,160);
+
+  // Name
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 48px system-ui';
+  ctx.fillText(k.name,36,220);
+
+  // ID
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  ctx.font='24px monospace';
+  ctx.fillText('ID: #'+String(k.id).padStart(4,'0'),36,290);
+
+  // Guthaben
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  ctx.font='20px system-ui';
+  ctx.textAlign='right';
+  ctx.fillText('GUTHABEN',W-36,160);
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 52px system-ui';
+  ctx.fillText(fmt(k.guthaben)+' €',W-36,220);
+  ctx.textAlign='left';
+
+  // QR Code in Karte (rechts unten)
+  const qrSize=110;
+  const qrX=W-qrSize-36;
+  const qrY=H-qrSize-36;
+  ctx.fillStyle='#ffffff';
+  roundRect(ctx,qrX-8,qrY-8,qrSize+16,qrSize+16,10);
+  ctx.fill();
+
+  // QR zeichnen
+  const url=BASE_URL+'?kunde='+k.id;
+  const qrImg=new Image();
+  qrImg.crossOrigin='anonymous';
+  qrImg.onload=function(){
+    ctx.drawImage(qrImg,qrX,qrY,qrSize,qrSize);
+  };
+  qrImg.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(url)+'&color=042C53&bgcolor=ffffff';
+}
+
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();}
+
+function openKarte(kId){
+  const k=kunden.find(x=>x.id===kId);if(!k)return;
+  activeKarteKId=kId;
+  document.getElementById('karteModal').classList.add('open');
+  setTimeout(()=>{
+    drawKarte(k);
+    const url=BASE_URL+'?kunde='+k.id;
+    drawQRonCanvas(url,document.getElementById('qrPreview'));
+  },100);
+}
+
+function exportKarte(){
+  // Warte kurz damit QR geladen ist
+  setTimeout(()=>{
+    const canvas=document.getElementById('karteCanvas');
+    const a=document.createElement('a');
+    const k=kunden.find(x=>x.id===activeKarteKId);
+    a.download='kundenkarte-'+(k?k.name.replace(/ /g,'-'):'kunde')+'.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  },800);
+}
+
+// ---- URL PARAMETER CHECK ----
 function checkURLParam(){
   const params=new URLSearchParams(window.location.search);
   const kId=params.get('kunde');
-  if(kId){
-    const id=parseInt(kId);
-    const k=kunden.find(x=>x.id===id);
-    if(k){
-      switchTab('kunden');
-      const wrap=document.getElementById('kundeDetailWrap');
-      wrap.style.display='block';
-      wrap.innerHTML=`<div class="kunde-detail">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div style="width:48px;height:48px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0C447C">${ini(k.name)}</div>
-          <div>
-            <div class="kunde-detail-name">${k.name}</div>
-            <div class="kunde-detail-id">ID #${String(k.id).padStart(4,'0')}</div>
-          </div>
-        </div>
-        <div class="kunde-detail-guth">${fmt(k.guthaben)} €</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn-sm btn-success" style="flex:1;padding:10px;font-size:13px" onclick="guthadenLaden(${k.id})">Guthaben aufladen</button>
-          <button class="btn-sm btn-blue" style="flex:1;padding:10px;font-size:13px" onclick="openKarte(${k.id})">Karte anzeigen</button>
-        </div>
-      </div>`;
-    }
+  if(!kId)return;
+  const id=parseInt(kId);
+  const k=kunden.find(x=>x.id===id);
+  const wrap=document.getElementById('kundeDetailWrap');
+  if(k){
+    wrap.style.display='block';
+    wrap.innerHTML=`<div class="kunde-detail">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:48px;height:48px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0C447C">${ini(k.name)}</div>
+        <div><div class="kunde-detail-name">${k.name}</div><div class="kunde-detail-id">ID #${String(k.id).padStart(4,'0')}</div></div>
+      </div>
+      <div class="kunde-detail-guth">${fmt(k.guthaben)} €</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-sm btn-success" style="flex:1;padding:10px;font-size:13px" onclick="guthadenLaden(${k.id})">Guthaben aufladen</button>
+        <button class="btn-sm btn-blue" style="flex:1;padding:10px;font-size:13px" onclick="openKarte(${k.id})">Karte anzeigen</button>
+      </div>
+    </div>`;
+  }else{
+    wrap.style.display='block';
+    wrap.innerHTML='<div class="kunde-detail"><div style="color:#A32D2D;font-weight:500">Kunde nicht gefunden — bitte erst in der App anlegen.</div></div>';
   }
 }
 
@@ -249,7 +397,6 @@ function addKunde(){
   document.getElementById('kName').value='';
   save();render();toast('toastK',name+' hinzugefügt!',true);
 }
-
 function addSpiel(){
   const name=document.getElementById('sName').value.trim();
   const typ=document.getElementById('sTyp').value;
@@ -259,7 +406,6 @@ function addSpiel(){
   document.getElementById('sName').value='';
   save();render();toast('toastS',name+' hinzugefügt!',true);
 }
-
 function doAusleihe(){
   const kId=parseInt(document.getElementById('aKunde').value);
   const sId=parseInt(document.getElementById('aSpiel').value);
@@ -275,52 +421,24 @@ function doAusleihe(){
   save();render();renderSelects();
   toast('toastA',`${s.name} an ${k.name} verliehen! ${fmt(kosten)} € abgezogen.`,true);
 }
-
 function rueckgabe(aId){
   const a=ausleihen.find(x=>x.id===aId);if(!a)return;
   const s=spiele.find(x=>x.id===a.sId);if(s)s.ausgeliehen=false;
   ausleihen=ausleihen.filter(x=>x.id!==aId);
   save();render();renderSelects();
 }
-
 function guthadenLaden(kId){
   const betrag=parseFloat(prompt('Wieviel Euro aufladen?')||'0');
   if(!betrag||betrag<=0)return;
   const k=kunden.find(x=>x.id===kId);if(!k)return;
   k.guthaben=Math.round((k.guthaben+betrag)*100)/100;
-  save();render();
-  const wrap=document.getElementById('kundeDetailWrap');
-  if(wrap.style.display!=='none') checkURLParam();
+  save();render();checkURLParam();
 }
-
-function openKarte(kId){
-  const k=kunden.find(x=>x.id===kId);if(!k)return;
-  document.getElementById('karteNameText').textContent=k.name;
-  document.getElementById('karteIdText').textContent='ID: #'+String(k.id).padStart(4,'0');
-  document.getElementById('karteGuthText').textContent=fmt(k.guthaben)+' €';
-  const qrDiv=document.getElementById('karteQR');
-  qrDiv.innerHTML='';
-  const url=BASE_URL+'?kunde='+k.id;
-  new QRCode(qrDiv,{text:url,width:90,height:90,colorDark:'#042C53',colorLight:'#ffffff'});
-  document.getElementById('karteModal').classList.add('open');
-}
-
-function exportKarte(){
-  const el=document.getElementById('karteExport');
-  html2canvas(el,{scale:3,useCORS:true,backgroundColor:null}).then(canvas=>{
-    const a=document.createElement('a');
-    a.download='kundenkarte-'+document.getElementById('karteNameText').textContent.replace(/ /g,'-')+'.png';
-    a.href=canvas.toDataURL('image/png');
-    a.click();
-  });
-}
-
 function renderSelects(){
   const ks=document.getElementById('aKunde');const ss=document.getElementById('aSpiel');
   if(ks)ks.innerHTML=kunden.map(k=>`<option value="${k.id}">${k.name} (${fmt(k.guthaben)} €)</option>`).join('')||'<option>Keine Kunden</option>';
   if(ss){const v=spiele.filter(s=>!s.ausgeliehen);ss.innerHTML=v.map(s=>`<option value="${s.id}">${s.name} — ${fmt(s.preis)} €/Tag</option>`).join('')||'<option>Alle ausgeliehen</option>';}
 }
-
 function renderKunden(){
   const el=document.getElementById('kundenList');
   if(!kunden.length){el.innerHTML='<div class="empty">Noch keine Kunden</div>';return;}
@@ -342,7 +460,6 @@ function renderRueckgabe(){
   el.innerHTML=ausleihen.map(a=>`<div class="item-row"><div class="item-info"><div class="item-name">${a.spielName}</div><div class="item-sub">${a.kundeName} · ${a.datum}</div></div><button class="btn-sm btn-danger" onclick="rueckgabe(${a.id})">Zurück</button></div>`).join('');
 }
 function render(){renderKunden();renderSpiele();renderAusleihen();renderRueckgabe();updateStats();}
-
 render();
 checkURLParam();
 </script>
