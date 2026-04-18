@@ -11,7 +11,7 @@
 body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:480px;margin:0 auto;min-height:100vh}
 .topbar{background:#185FA5;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 .app-title{font-size:18px;font-weight:600}
-.save-badge{font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.2)}
+.sync-badge{font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.2)}
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}
 .stat{background:#fff;border-radius:10px;padding:10px 12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
 .stat-label{font-size:11px;color:#888;margin-bottom:2px}
@@ -49,6 +49,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 .val{font-size:13px;font-weight:600;color:#111;white-space:nowrap}
 .actions{display:flex;gap:4px;flex-shrink:0}
 .empty{padding:24px;text-align:center;font-size:13px;color:#aaa}
+.loading{padding:24px;text-align:center;font-size:13px;color:#888}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;align-items:center;justify-content:center;padding:16px}
 .modal-bg.open{display:flex}
 .modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;max-height:90vh;overflow-y:auto}
@@ -72,7 +73,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
 
 <div class="topbar">
   <div class="app-title">GameDock</div>
-  <span class="save-badge" id="saveBadge">gespeichert</span>
+  <span class="sync-badge" id="syncBadge">verbinden...</span>
 </div>
 
 <div class="stats-row">
@@ -100,7 +101,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
   </div>
   <div class="list-card">
     <div class="list-header">Alle Kunden</div>
-    <div id="kundenList"></div>
+    <div id="kundenList"><div class="loading">Laden...</div></div>
   </div>
 </div>
 
@@ -116,7 +117,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
   </div>
   <div class="list-card">
     <div class="list-header">Spielekatalog</div>
-    <div id="spieleList"></div>
+    <div id="spieleList"><div class="loading">Laden...</div></div>
   </div>
 </div>
 
@@ -130,14 +131,14 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
   </div>
   <div class="list-card">
     <div class="list-header">Aktive Ausleihen</div>
-    <div id="ausleiheList"></div>
+    <div id="ausleiheList"><div class="loading">Laden...</div></div>
   </div>
 </div>
 
 <div id="panel-rueckgabe" class="panel">
   <div class="list-card">
     <div class="list-header">Spiel zurückgeben</div>
-    <div id="rueckgabeList"></div>
+    <div id="rueckgabeList"><div class="loading">Laden...</div></div>
   </div>
 </div>
 
@@ -150,7 +151,7 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
       <canvas id="karteCanvas" width="600" height="340" style="width:300px;height:170px;border-radius:14px"></canvas>
     </div>
     <div class="qr-row">
-      <canvas id="qrPreview" width="90" height="90" style="border-radius:6px;flex-shrink:0"></canvas>
+      <img id="qrPreview" width="90" height="90" style="border-radius:6px;flex-shrink:0" src="" alt="QR">
       <div class="qr-info">
         <strong>So scannen:</strong>
         Normale Kamera-App öffnen, QR-Code scannen — der Kunde öffnet sich automatisch in der App.
@@ -163,286 +164,199 @@ body{font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;max-width:48
   </div>
 </div>
 
-<script>
-const BASE_URL='https://thed-creator.github.io/gamedock/';
-const S={get:k=>{try{return JSON.parse(localStorage.getItem('gd_'+k)||'null')}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem('gd_'+k,JSON.stringify(v))}catch(e){}}};
-let kunden=S.get('kunden')||[];
-let spiele=S.get('spiele')||[];
-let ausleihen=S.get('ausleihen')||[];
-let nextK=S.get('nextK')||1;
-let nextS=S.get('nextS')||1;
-let nextA=S.get('nextA')||1;
-let activeKarteKId=null;
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, push, onValue, update, remove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
-function save(){S.set('kunden',kunden);S.set('spiele',spiele);S.set('ausleihen',ausleihen);S.set('nextK',nextK);S.set('nextS',nextS);S.set('nextA',nextA);document.getElementById('saveBadge').textContent='gespeichert';}
+const firebaseConfig = {
+  apiKey: "AIzaSyBRo1S6_VsYvyPU3gObmbPbJDCgr_gfyWs",
+  authDomain: "gamedock-9f197.firebaseapp.com",
+  projectId: "gamedock-9f197",
+  databaseURL: "https://gamedock-9f197-default-rtdb.europe-west1.firebasedatabase.app",
+  storageBucket: "gamedock-9f197.firebasestorage.app",
+  messagingSenderId: "943055939870",
+  appId: "1:943055939870:web:9f0aed285c6cd3d920c10f"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const BASE_URL = 'https://thed-creator.github.io/gamedock/';
+let kunden = [];
+let spiele = [];
+let ausleihen = [];
+let activeKarteKId = null;
+
+function setSyncBadge(text, ok){
+  const b = document.getElementById('syncBadge');
+  b.textContent = text;
+  b.style.background = ok ? 'rgba(100,220,130,0.3)' : 'rgba(255,255,255,0.2)';
+}
+
 function ini(n){return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 function fmt(n){return(Math.round(n*100)/100).toFixed(2);}
 function toast(id,msg,ok){const el=document.getElementById(id);el.textContent=msg;el.className='toast '+(ok?'ok':'err');el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
 function updateStats(){document.getElementById('statK').textContent=kunden.length;document.getElementById('statS').textContent=spiele.length;document.getElementById('statA').textContent=ausleihen.length;}
-function switchTab(t){document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['kunden','spiele','ausleihe','rueckgabe'][i]===t));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.getElementById('panel-'+t).classList.add('active');if(t==='ausleihe'||t==='rueckgabe')renderSelects();render();}
+function switchTab(t){document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['kunden','spiele','ausleihe','rueckgabe'][i]===t));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.getElementById('panel-'+t).classList.add('active');if(t==='ausleihe'||t==='rueckgabe')renderSelects();}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+window.closeModal = closeModal;
 
-// ---- QR CODE GENERATOR (kein externes Script) ----
-const QR={};
-(function(){
-  const ALPHANUMERIC='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-  function getMode(s){return s.match(/^[0-9]+$/)?1:s.match(/^[0-9A-Z $%*+\-./:]+$/)?2:4;}
-  function encode(text){
-    const data=[];
-    for(let i=0;i<text.length;i++)data.push(text.charCodeAt(i));
-    return data;
-  }
-  function makeMatrix(size){return Array.from({length:size},()=>new Array(size).fill(null));}
-  // Simplified QR - uses a reliable external approach via canvas pixel drawing
-  // We use a simple URL-safe encoding approach
-  QR.generate=function(text,size,canvas){
-    // Use Google Charts API equivalent via data URI approach
-    // Since we can't load external, we draw a simple placeholder pattern
-    // and encode the URL visually
-    const ctx=canvas.getContext('2d');
-    const s=canvas.width;
-    ctx.fillStyle='#ffffff';
-    ctx.fillRect(0,0,s,s);
-    // Draw using a deterministic pattern based on text
-    const cells=25;
-    const cell=s/cells;
-    const bits=textToBits(text,cells*cells);
-    ctx.fillStyle='#042C53';
-    // Finder patterns
-    drawFinder(ctx,0,0,cell,7);
-    drawFinder(ctx,(cells-7)*cell,0,cell,7);
-    drawFinder(ctx,0,(cells-7)*cell,cell,7);
-    // Data bits
-    for(let i=0;i<cells;i++){
-      for(let j=0;j<cells;j++){
-        if(isFinder(i,j,cells))continue;
-        if(bits[i*cells+j]){
-          ctx.fillRect(j*cell,i*cell,cell,cell);
-        }
-      }
-    }
-    // Border quiet zone indicator
-    ctx.strokeStyle='#042C53';
-    ctx.lineWidth=1;
-    ctx.strokeRect(0,0,s,s);
-  };
-  function drawFinder(ctx,x,y,cell,size){
-    ctx.fillStyle='#042C53';
-    ctx.fillRect(x,y,size*cell,size*cell);
-    ctx.fillStyle='#ffffff';
-    ctx.fillRect(x+cell,y+cell,(size-2)*cell,(size-2)*cell);
-    ctx.fillStyle='#042C53';
-    ctx.fillRect(x+2*cell,y+2*cell,(size-4)*cell,(size-4)*cell);
-  }
-  function isFinder(r,c,n){
-    return (r<8&&c<8)||(r<8&&c>=n-8)||(r>=n-8&&c<8);
-  }
-  function textToBits(text,len){
-    const bits=new Array(len).fill(0);
-    let h=5381;
-    for(let i=0;i<text.length;i++){h=((h<<5)+h)^text.charCodeAt(i);h=h&0x7fffffff;}
-    const chars=text.split('').map(c=>c.charCodeAt(0));
-    for(let i=0;i<len;i++){
-      const ci=chars[i%chars.length];
-      const seed=(h*1000003+i*ci+i*i)&0x7fffffff;
-      bits[i]=seed%3===0?1:seed%7<3?1:0;
-    }
-    bits[0]=1;bits[len-1]=1;
-    return bits;
-  }
-})();
+// Firebase Listeners
+onValue(ref(db,'kunden'), snap=>{
+  kunden=[];
+  snap.forEach(c=>{kunden.push({fbKey:c.key,...c.val()});});
+  renderKunden(); updateStats(); renderSelects();
+  setSyncBadge('online', true);
+  checkURLParam();
+});
+onValue(ref(db,'spiele'), snap=>{
+  spiele=[];
+  snap.forEach(c=>{spiele.push({fbKey:c.key,...c.val()});});
+  renderSpiele(); updateStats(); renderSelects();
+});
+onValue(ref(db,'ausleihen'), snap=>{
+  ausleihen=[];
+  snap.forEach(c=>{ausleihen.push({fbKey:c.key,...c.val()});});
+  renderAusleihen(); renderRueckgabe(); updateStats();
+});
 
-// ---- ECHTER QR via URL Image (zuverlässiger) ----
-function drawQRonCanvas(text, canvas){
-  const ctx=canvas.getContext('2d');
-  const size=canvas.width;
-  // Use quickchart.io QR service via image
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.onload=function(){ctx.drawImage(img,0,0,size,size);};
-  img.onerror=function(){QR.generate(text,size,canvas);};
-  img.src='https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(text)+'&color=042C53&bgcolor=ffffff';
-}
+// Kunden
+window.addKunde = function(){
+  const name=document.getElementById('kName').value.trim();
+  const g=parseFloat(document.getElementById('kGuth').value)||0;
+  if(!name)return toast('toastK','Bitte einen Namen eingeben',false);
+  push(ref(db,'kunden'),{name,guthaben:Math.round(g*100)/100});
+  document.getElementById('kName').value='';
+  toast('toastK',name+' hinzugefügt!',true);
+};
 
-// ---- KARTE ZEICHNEN ----
-function drawKarte(k){
+window.guthadenLaden = function(fbKey){
+  const betrag=parseFloat(prompt('Wieviel Euro aufladen?')||'0');
+  if(!betrag||betrag<=0)return;
+  const k=kunden.find(x=>x.fbKey===fbKey);if(!k)return;
+  update(ref(db,'kunden/'+fbKey),{guthaben:Math.round((k.guthaben+betrag)*100)/100});
+};
+
+// Spiele
+window.addSpiel = function(){
+  const name=document.getElementById('sName').value.trim();
+  const typ=document.getElementById('sTyp').value;
+  const preis=parseFloat(document.getElementById('sPreis').value)||0;
+  if(!name)return toast('toastS','Bitte einen Namen eingeben',false);
+  push(ref(db,'spiele'),{name,typ,preis:Math.round(preis*100)/100,ausgeliehen:false});
+  document.getElementById('sName').value='';
+  toast('toastS',name+' hinzugefügt!',true);
+};
+
+// Ausleihe
+window.doAusleihe = function(){
+  const kFbKey=document.getElementById('aKunde').value;
+  const sFbKey=document.getElementById('aSpiel').value;
+  const tage=parseInt(document.getElementById('aTage').value)||1;
+  const k=kunden.find(x=>x.fbKey===kFbKey);
+  const s=spiele.find(x=>x.fbKey===sFbKey);
+  if(!k||!s)return toast('toastA','Bitte Kunde und Spiel wählen',false);
+  const kosten=Math.round(s.preis*tage*100)/100;
+  if(k.guthaben<kosten)return toast('toastA',`Zu wenig Guthaben! Hat ${fmt(k.guthaben)} €, braucht ${fmt(kosten)} €`,false);
+  update(ref(db,'kunden/'+kFbKey),{guthaben:Math.round((k.guthaben-kosten)*100)/100});
+  update(ref(db,'spiele/'+sFbKey),{ausgeliehen:true});
+  push(ref(db,'ausleihen'),{kFbKey,sFbKey,kundeName:k.name,spielName:s.name,kosten,tage,datum:new Date().toLocaleDateString('de-DE')});
+  toast('toastA',`${s.name} an ${k.name} verliehen! ${fmt(kosten)} € abgezogen.`,true);
+};
+
+// Rückgabe
+window.rueckgabe = function(fbKey){
+  const a=ausleihen.find(x=>x.fbKey===fbKey);if(!a)return;
+  update(ref(db,'spiele/'+a.sFbKey),{ausgeliehen:false});
+  remove(ref(db,'ausleihen/'+fbKey));
+};
+
+// Karte
+function qrURL(kFbKey){return BASE_URL+'?kunde='+encodeURIComponent(kFbKey);}
+function qrImgSrc(kFbKey){return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(qrURL(kFbKey))+'&color=042C53&bgcolor=ffffff';}
+
+window.openKarte = function(fbKey){
+  const k=kunden.find(x=>x.fbKey===fbKey);if(!k)return;
+  activeKarteKId=fbKey;
+  document.getElementById('karteModal').classList.add('open');
+  const qrSrc=qrImgSrc(fbKey);
+  document.getElementById('qrPreview').src=qrSrc;
+  setTimeout(()=>drawKarte(k,qrSrc),200);
+};
+
+function drawKarte(k, qrSrc){
   const canvas=document.getElementById('karteCanvas');
   const ctx=canvas.getContext('2d');
   const W=canvas.width,H=canvas.height;
-
-  // Hintergrund
   const grad=ctx.createLinearGradient(0,0,W,H);
-  grad.addColorStop(0,'#185FA5');
-  grad.addColorStop(1,'#042C53');
+  grad.addColorStop(0,'#185FA5');grad.addColorStop(1,'#042C53');
   ctx.fillStyle=grad;
-  roundRect(ctx,0,0,W,H,28);
-  ctx.fill();
-
-  // Dekokreis
-  ctx.beginPath();
-  ctx.arc(W+80,H*0.3,220,0,Math.PI*2);
-  ctx.fillStyle='rgba(255,255,255,0.06)';
-  ctx.fill();
-
-  // Logo
-  ctx.fillStyle='#ffffff';
-  ctx.font='bold 36px system-ui';
-  ctx.fillText('GameDock',36,72);
-
-  // Chip
-  ctx.fillStyle='rgba(255,255,255,0.22)';
-  roundRect(ctx,W-100,36,60,44,8);
-  ctx.fill();
-
-  // Name Label
-  ctx.fillStyle='rgba(255,255,255,0.55)';
-  ctx.font='20px system-ui';
-  ctx.fillText('MITGLIED',36,160);
-
-  // Name
-  ctx.fillStyle='#ffffff';
-  ctx.font='bold 48px system-ui';
-  ctx.fillText(k.name,36,220);
-
-  // ID
-  ctx.fillStyle='rgba(255,255,255,0.6)';
-  ctx.font='24px monospace';
-  ctx.fillText('ID: #'+String(k.id).padStart(4,'0'),36,290);
-
-  // Guthaben
-  ctx.fillStyle='rgba(255,255,255,0.55)';
-  ctx.font='20px system-ui';
-  ctx.textAlign='right';
-  ctx.fillText('GUTHABEN',W-36,160);
-  ctx.fillStyle='#ffffff';
-  ctx.font='bold 52px system-ui';
-  ctx.fillText(fmt(k.guthaben)+' €',W-36,220);
+  roundRect(ctx,0,0,W,H,28);ctx.fill();
+  ctx.beginPath();ctx.arc(W+80,H*0.3,220,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.06)';ctx.fill();
+  ctx.fillStyle='#ffffff';ctx.font='bold 36px system-ui';ctx.fillText('GameDock',36,72);
+  ctx.fillStyle='rgba(255,255,255,0.22)';roundRect(ctx,W-100,36,60,44,8);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='20px system-ui';ctx.fillText('MITGLIED',36,160);
+  ctx.fillStyle='#ffffff';ctx.font='bold 44px system-ui';ctx.fillText(k.name,36,215);
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='22px monospace';ctx.fillText('ID: '+k.fbKey.slice(0,8),36,285);
+  ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='20px system-ui';ctx.textAlign='right';ctx.fillText('GUTHABEN',W-150,160);
+  ctx.fillStyle='#ffffff';ctx.font='bold 44px system-ui';ctx.fillText(fmt(k.guthaben)+' €',W-150,215);
   ctx.textAlign='left';
-
-  // QR Code in Karte (rechts unten)
-  const qrSize=110;
-  const qrX=W-qrSize-36;
-  const qrY=H-qrSize-36;
-  ctx.fillStyle='#ffffff';
-  roundRect(ctx,qrX-8,qrY-8,qrSize+16,qrSize+16,10);
-  ctx.fill();
-
-  // QR zeichnen
-  const url=BASE_URL+'?kunde='+k.id;
-  const qrImg=new Image();
-  qrImg.crossOrigin='anonymous';
-  qrImg.onload=function(){
-    ctx.drawImage(qrImg,qrX,qrY,qrSize,qrSize);
-  };
-  qrImg.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(url)+'&color=042C53&bgcolor=ffffff';
+  // QR rechts unten
+  const qrSize=110,qrX=W-qrSize-36,qrY=H-qrSize-30;
+  ctx.fillStyle='#ffffff';roundRect(ctx,qrX-8,qrY-8,qrSize+16,qrSize+16,10);ctx.fill();
+  const img=new Image();img.crossOrigin='anonymous';
+  img.onload=()=>{ctx.drawImage(img,qrX,qrY,qrSize,qrSize);};
+  img.src=qrSrc;
 }
 
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();}
 
-function openKarte(kId){
-  const k=kunden.find(x=>x.id===kId);if(!k)return;
-  activeKarteKId=kId;
-  document.getElementById('karteModal').classList.add('open');
-  setTimeout(()=>{
-    drawKarte(k);
-    const url=BASE_URL+'?kunde='+k.id;
-    drawQRonCanvas(url,document.getElementById('qrPreview'));
-  },100);
-}
-
-function exportKarte(){
-  // Warte kurz damit QR geladen ist
+window.exportKarte = function(){
   setTimeout(()=>{
     const canvas=document.getElementById('karteCanvas');
+    const k=kunden.find(x=>x.fbKey===activeKarteKId);
     const a=document.createElement('a');
-    const k=kunden.find(x=>x.id===activeKarteKId);
     a.download='kundenkarte-'+(k?k.name.replace(/ /g,'-'):'kunde')+'.png';
-    a.href=canvas.toDataURL('image/png');
-    a.click();
-  },800);
-}
+    a.href=canvas.toDataURL('image/png');a.click();
+  },1000);
+};
 
-// ---- URL PARAMETER CHECK ----
+// URL Parameter — Kunde per QR öffnen
 function checkURLParam(){
   const params=new URLSearchParams(window.location.search);
-  const kId=params.get('kunde');
-  if(!kId)return;
-  const id=parseInt(kId);
-  const k=kunden.find(x=>x.id===id);
+  const fbKey=params.get('kunde');
+  if(!fbKey)return;
+  const k=kunden.find(x=>x.fbKey===fbKey);
   const wrap=document.getElementById('kundeDetailWrap');
   if(k){
     wrap.style.display='block';
     wrap.innerHTML=`<div class="kunde-detail">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div style="width:48px;height:48px;border-radius:50%;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0C447C">${ini(k.name)}</div>
-        <div><div class="kunde-detail-name">${k.name}</div><div class="kunde-detail-id">ID #${String(k.id).padStart(4,'0')}</div></div>
+        <div><div class="kunde-detail-name">${k.name}</div><div class="kunde-detail-id">ID: ${k.fbKey.slice(0,8)}</div></div>
       </div>
       <div class="kunde-detail-guth">${fmt(k.guthaben)} €</div>
       <div style="display:flex;gap:8px">
-        <button class="btn-sm btn-success" style="flex:1;padding:10px;font-size:13px" onclick="guthadenLaden(${k.id})">Guthaben aufladen</button>
-        <button class="btn-sm btn-blue" style="flex:1;padding:10px;font-size:13px" onclick="openKarte(${k.id})">Karte anzeigen</button>
+        <button class="btn-sm btn-success" style="flex:1;padding:10px;font-size:13px" onclick="guthadenLaden('${k.fbKey}')">Guthaben aufladen</button>
+        <button class="btn-sm btn-blue" style="flex:1;padding:10px;font-size:13px" onclick="openKarte('${k.fbKey}')">Karte anzeigen</button>
       </div>
     </div>`;
-  }else{
+  } else if(kunden.length>0){
     wrap.style.display='block';
-    wrap.innerHTML='<div class="kunde-detail"><div style="color:#A32D2D;font-weight:500">Kunde nicht gefunden — bitte erst in der App anlegen.</div></div>';
+    wrap.innerHTML='<div class="kunde-detail"><div style="color:#A32D2D;font-weight:500">Kunde nicht gefunden.</div></div>';
   }
 }
 
-function addKunde(){
-  const name=document.getElementById('kName').value.trim();
-  const g=parseFloat(document.getElementById('kGuth').value)||0;
-  if(!name)return toast('toastK','Bitte einen Namen eingeben',false);
-  kunden.push({id:nextK++,name,guthaben:Math.round(g*100)/100});
-  document.getElementById('kName').value='';
-  save();render();toast('toastK',name+' hinzugefügt!',true);
-}
-function addSpiel(){
-  const name=document.getElementById('sName').value.trim();
-  const typ=document.getElementById('sTyp').value;
-  const preis=parseFloat(document.getElementById('sPreis').value)||0;
-  if(!name)return toast('toastS','Bitte einen Namen eingeben',false);
-  spiele.push({id:nextS++,name,typ,preis:Math.round(preis*100)/100,ausgeliehen:false});
-  document.getElementById('sName').value='';
-  save();render();toast('toastS',name+' hinzugefügt!',true);
-}
-function doAusleihe(){
-  const kId=parseInt(document.getElementById('aKunde').value);
-  const sId=parseInt(document.getElementById('aSpiel').value);
-  const tage=parseInt(document.getElementById('aTage').value)||1;
-  const k=kunden.find(x=>x.id===kId);
-  const s=spiele.find(x=>x.id===sId);
-  if(!k||!s)return toast('toastA','Bitte Kunde und Spiel wählen',false);
-  const kosten=Math.round(s.preis*tage*100)/100;
-  if(k.guthaben<kosten)return toast('toastA',`Zu wenig Guthaben! Hat ${fmt(k.guthaben)} €, braucht ${fmt(kosten)} €`,false);
-  k.guthaben=Math.round((k.guthaben-kosten)*100)/100;
-  s.ausgeliehen=true;
-  ausleihen.push({id:nextA++,kId,sId,kundeName:k.name,spielName:s.name,kosten,tage,datum:new Date().toLocaleDateString('de-DE')});
-  save();render();renderSelects();
-  toast('toastA',`${s.name} an ${k.name} verliehen! ${fmt(kosten)} € abgezogen.`,true);
-}
-function rueckgabe(aId){
-  const a=ausleihen.find(x=>x.id===aId);if(!a)return;
-  const s=spiele.find(x=>x.id===a.sId);if(s)s.ausgeliehen=false;
-  ausleihen=ausleihen.filter(x=>x.id!==aId);
-  save();render();renderSelects();
-}
-function guthadenLaden(kId){
-  const betrag=parseFloat(prompt('Wieviel Euro aufladen?')||'0');
-  if(!betrag||betrag<=0)return;
-  const k=kunden.find(x=>x.id===kId);if(!k)return;
-  k.guthaben=Math.round((k.guthaben+betrag)*100)/100;
-  save();render();checkURLParam();
-}
 function renderSelects(){
   const ks=document.getElementById('aKunde');const ss=document.getElementById('aSpiel');
-  if(ks)ks.innerHTML=kunden.map(k=>`<option value="${k.id}">${k.name} (${fmt(k.guthaben)} €)</option>`).join('')||'<option>Keine Kunden</option>';
-  if(ss){const v=spiele.filter(s=>!s.ausgeliehen);ss.innerHTML=v.map(s=>`<option value="${s.id}">${s.name} — ${fmt(s.preis)} €/Tag</option>`).join('')||'<option>Alle ausgeliehen</option>';}
+  if(ks)ks.innerHTML=kunden.map(k=>`<option value="${k.fbKey}">${k.name} (${fmt(k.guthaben)} €)</option>`).join('')||'<option>Keine Kunden</option>';
+  if(ss){const v=spiele.filter(s=>!s.ausgeliehen);ss.innerHTML=v.map(s=>`<option value="${s.fbKey}">${s.name} — ${fmt(s.preis)} €/Tag</option>`).join('')||'<option>Alle ausgeliehen</option>';}
 }
 function renderKunden(){
   const el=document.getElementById('kundenList');
   if(!kunden.length){el.innerHTML='<div class="empty">Noch keine Kunden</div>';return;}
-  el.innerHTML=kunden.map(k=>`<div class="item-row"><div class="avatar">${ini(k.name)}</div><div class="item-info"><div class="item-name">${k.name}</div><div class="item-sub">ID #${String(k.id).padStart(4,'0')} · ${fmt(k.guthaben)} €</div></div><div class="actions"><button class="btn-sm btn-success" onclick="guthadenLaden(${k.id})">+ €</button><button class="btn-sm btn-blue" onclick="openKarte(${k.id})">Karte</button></div></div>`).join('');
+  el.innerHTML=kunden.map(k=>`<div class="item-row"><div class="avatar">${ini(k.name)}</div><div class="item-info"><div class="item-name">${k.name}</div><div class="item-sub">${fmt(k.guthaben)} €</div></div><div class="actions"><button class="btn-sm btn-success" onclick="guthadenLaden('${k.fbKey}')">+ €</button><button class="btn-sm btn-blue" onclick="openKarte('${k.fbKey}')">Karte</button></div></div>`).join('');
 }
 function renderSpiele(){
   const el=document.getElementById('spieleList');
@@ -457,11 +371,8 @@ function renderAusleihen(){
 function renderRueckgabe(){
   const el=document.getElementById('rueckgabeList');
   if(!ausleihen.length){el.innerHTML='<div class="empty">Keine aktiven Ausleihen</div>';return;}
-  el.innerHTML=ausleihen.map(a=>`<div class="item-row"><div class="item-info"><div class="item-name">${a.spielName}</div><div class="item-sub">${a.kundeName} · ${a.datum}</div></div><button class="btn-sm btn-danger" onclick="rueckgabe(${a.id})">Zurück</button></div>`).join('');
+  el.innerHTML=ausleihen.map(a=>`<div class="item-row"><div class="item-info"><div class="item-name">${a.spielName}</div><div class="item-sub">${a.kundeName} · ${a.datum}</div></div><button class="btn-sm btn-danger" onclick="rueckgabe('${a.fbKey}')">Zurück</button></div>`).join('');
 }
-function render(){renderKunden();renderSpiele();renderAusleihen();renderRueckgabe();updateStats();}
-render();
-checkURLParam();
 </script>
 </body>
 </html>
